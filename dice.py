@@ -12,7 +12,6 @@ import numpy as np
 
 logger = logging.getLogger (__name__)
 
-
 def cnn_model_fn (features, labels, mode, params):
   """Model function for CNN."""
   # Input Layer
@@ -59,83 +58,6 @@ def cnn_model_fn (features, labels, mode, params):
       # Report sum of error for compatibility with pre-made estimators
       loss=total_loss,
       eval_metric_ops=eval_metrics)
-
-
-"""
-ausgabeneuronen = 10*7
-
-classifier = tf.DNNClassifier (hidden_units = [ 6348, 1024, 512, 256 ],
-                               feature_columns = None, # Was kommt hier hin?
-                               n_classes = 70)
-    hidden_units,
-    feature_columns,
-    model_dir=None,
-    n_classes=2,
-    weight_column=None,
-    label_vocabulary=None,
-    optimizer='Adagrad',
-    activation_fn=tf.nn.relu,
-    dropout=None,
-    input_layer_partitioner=None,
-    config=None,
-    warm_start_from=None,
-    loss_reduction=losses.Reduction.SUM
-)
-"""
-
-def ImageIterator (image):
-    for y in range (image.height):
-        for x in range (image.width):
-            yield image.getpixel ( (x, y) )
-
-class DataSet:
-    SMALL_FACTOR = 50
-    
-    def __init__ (self, filename, value, dice_pos_x=None, dice_pos_y=None):
-        self.filename = filename
-        self.image = None
-        self.image_small = None
-        self.value = value
-        self.dice_pos = (dice_pos_x, dice_pos_y)
-
-
-        
-    def hasDicePos (self):
-        return self.dice_pos[0] != None and self.dice_pos[1] != None
-        
-    def __str__ (self):
-        s = "{}: {}".format (self.filename, self.value)
-        
-        if self.image != None:
-            s += " - {} x {}".format (self.image.width, self.image.height)
-        
-        if self.image_small != None:
-            s += " ({} x {})".format (self.image_small.width, self.image_small.height)
-        
-        if self.hasDicePos ():
-            s += " @ {} x {} ({} x {})".format (self.dice_pos[0], self.dice_pos[1], int (self.dice_pos[0] / self.SMALL_FACTOR), int (self.dice_pos[1] / self.SMALL_FACTOR))
-            
-        return s
-    
-    def __repr__ (self):
-        return "DataSet ({}, {}, {}, {})".format (repr (self.filename), repr (self.value), repr (self.dice_pos_x), repr (self.dice_pos_y))
-        
-    def loadImage (self):
-        if self.image == None:
-            self.image = PIL.Image.open (self.filename)
-            if self.image.width < self.image.height:
-                self.image = self.image.transpose (PIL.Image.ROTATE_90)
-           
-            self.image_small = self.image.resize ( (int (self.image.width / self.SMALL_FACTOR),
-                                                    int (self.image.height / self.SMALL_FACTOR)) ).convert (mode='L')
-            self.image_small.show ()
-            
-    def getTFFeatureSmall (self):
-        self.loadImage ()
-        if self.image_small != None:
-            return np.array ([ p for p in ImageIterator (self.image_small) ]).reshape ( (-1, 92) )
-        
-        return None
 
 def loadSmallImage (fname, *label):
     #print ("###### fname:", fname)
@@ -225,15 +147,6 @@ class Trainer:
             print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
 
 
-        """
-        for d in self.training_data[:2]:
-            d.loadImage ()
-            f = d.getTFFeatureSmall ()
-            
-        for d in self.training_data:
-            logger.info (str (d))
-        """
-        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser (description='Würfelerkennung.')
     parser.add_argument ('-t', dest='training_fname', default='/home/harald/NoBackup/Würfel/W20-grau-training-test.json',
