@@ -15,16 +15,14 @@ logger = logging.getLogger (__name__)
 def cnn_model_fn (features, labels, mode, params):
   """Model function for CNN."""
   # Input Layer
-  input_layer = tf.reshape (features["images_small"], [-1, 92 * 69])
+  layers = params.get ("layers", [6348, 2048, 512, 128, 32, 2])
 
-  layer1 = tf.layers.dense (inputs=input_layer, units=6348, activation=tf.nn.relu)
-  layer2 = tf.layers.dense (inputs=layer1, units=2048, activation=tf.nn.relu)
-  layer3 = tf.layers.dense (inputs=layer2, units=512, activation=tf.nn.relu)
-  layer4 = tf.layers.dense (inputs=layer3, units=128, activation=tf.nn.relu)
-  layer5 = tf.layers.dense (inputs=layer4, units=32, activation=tf.nn.relu)
-  layer6 = tf.layers.dense (inputs=layer5, units=2)
+  layer = tf.reshape (features["images_small"], [-1, 92 * 69])
 
-  predictions = tf.squeeze (layer6)
+  for lsize in layers:
+      layer = tf.layers.dense (inputs=layer, units=lsize, activation=tf.nn.relu)
+
+  predictions = tf.squeeze (layer)
 
   if mode == tf.estimator.ModeKeys.PREDICT:
     return tf.estimator.EstimatorSpec (mode=mode, predictions={"position": predictions})
@@ -130,6 +128,7 @@ class Trainer:
         estimator = tf.estimator.Estimator(
                         model_fn=cnn_model_fn,
                         params={
+                            "layers": [6348, 2048, 512, 128, 32, 2],
                             "learning_rate": 0.001,
                             "optimizer": tf.train.AdamOptimizer
                         },
