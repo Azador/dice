@@ -6,81 +6,125 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>637</width>
+    <height>575</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="spacing">
+     <number>6</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
-     <widget class="QWidget" name="image_w" native="true"/>
-    </item>
-    <item>
-     <layout class="QGridLayout" name="gridLayout">
-      <item row="6" column="0">
-       <spacer name="verticalSpacer">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
+     <widget class="QSplitter" name="splitter_w">
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Sunken</enum>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="handleWidth">
+       <number>4</number>
+      </property>
+      <widget class="QWidget" name="image_w" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
+      <widget class="QWidget" name="layoutWidget">
+       <layout class="QGridLayout" name="gridLayout">
+        <property name="topMargin">
+         <number>6</number>
         </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
+        <property name="bottomMargin">
+         <number>6</number>
         </property>
-       </spacer>
-      </item>
-      <item row="2" column="1">
-       <widget class="QSpinBox" name="dice_position_x_sb"/>
-      </item>
-      <item row="0" column="0" colspan="2">
-       <widget class="QPushButton" name="snap_image_btn">
-        <property name="text">
-         <string>Snap Image</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="dice_value_lb">
-        <property name="text">
-         <string>Value</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="dice_position_lb">
-        <property name="text">
-         <string>Dice Position</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0" colspan="2">
-       <widget class="QPushButton" name="analyze_image_btn">
-        <property name="text">
-         <string>Analyze Image</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
-       <widget class="QSpinBox" name="dice_position_y_sb"/>
-      </item>
-      <item row="4" column="1">
-       <widget class="QSpinBox" name="dice_value_sb"/>
-      </item>
-      <item row="5" column="1">
-       <widget class="QPushButton" name="add_data_btn">
-        <property name="text">
-         <string>Add Data</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
+        <item row="0" column="0" colspan="2">
+         <widget class="QPushButton" name="snap_image_btn">
+          <property name="text">
+           <string>Snap Image</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QPushButton" name="analyze_image_btn">
+          <property name="text">
+           <string>Analyze Image</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="dice_position_lb">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Dice Position</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="dice_value_lb">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Value</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QSpinBox" name="dice_value_sb"/>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="dice_position_y_sb"/>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="dice_position_x_sb"/>
+        </item>
+        <item row="6" column="0" colspan="2">
+         <widget class="QTreeView" name="images_tbl"/>
+        </item>
+        <item row="5" column="1">
+         <widget class="QPushButton" name="add_data_btn">
+          <property name="text">
+           <string>Add Data</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
     </item>
    </layout>
   </widget>
@@ -89,7 +133,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>637</width>
      <height>29</height>
     </rect>
    </property>
@@ -105,12 +149,12 @@
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSave">
    <property name="text">
-    <string>Save</string>
+    <string>&amp;Save</string>
    </property>
   </action>
   <action name="actionLoad">
    <property name="text">
-    <string>Load</string>
+    <string>&amp;Load</string>
    </property>
   </action>
  </widget>

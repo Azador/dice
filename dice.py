@@ -2,13 +2,21 @@
 # -*- coding: utf-8 -*-
 #
 
+from PyQt5 import QtWidgets
+from PyQt5 import QtCore
+from PyQt5 import QtGui
+
 import logging
 import json
 import argparse
 import sys
+import os
 import PIL.Image
 import tensorflow as tf
 import numpy as np
+
+from main_window import Ui_main_window
+import config
 
 logger = logging.getLogger (__name__)
 
@@ -144,7 +152,114 @@ class Trainer:
             estimator.train (input_fn=lambda: loadData (self.training_fname), steps=2)
             r = estimator.evaluate (input_fn=lambda: loadData (self.training_fname), steps=1)
             print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
+            
 
+class ImagesModel (QtGui.QStandardItemModel):
+    
+    def __init__ (self):
+        QtGui.QStandardItemModel.__init__ (self, 5, 3)
+        self.data_list = ["Test"]
+        #self.setData (self.index (0, 0), "Test")
+        self.setData (self.index (0, 0), "Test")
+        #print (dir (self))
+        
+    def setDataList (self, data):
+        self.beginResetModel ()
+        self.data_list = data
+        self.endResetModel ()
+        self.dataChanged.emit (self.index (0,0), self.index (len (data)-1, 3))
+    
+    def columnCount (self, parent_index):
+        if parent_index == QtCore.QModelIndex ():
+            return 3
+        
+        return 0
+    
+    def headerData (self, section, orientation, role):
+        if orientation == QtCore.Qt.Horizontal:
+            if role == QtCore.Qt.DisplayRole:
+                if section == 0:
+                    return "Image"
+                
+                if section == 1:
+                    return "Pos"
+                
+                return "Value"
+
+    def rowCount (self, parent_index):
+        if parent_index == QtCore.QModelIndex ():
+            return len (self.data_list)
+
+        return 0
+    
+    def data (self, index, role):
+        if role == QtCore.Qt.DisplayRole:
+            print ("index:", index.row (), index.column ())
+            #print ("args:", repr (args))
+            #print ("index", repr (index))
+            #print ("role ", repr (role))
+            return "Blub"
+        
+        return None
+
+class MainWindow (QtWidgets.QMainWindow):
+    ui = Ui_main_window ()
+    
+    def __init__ (self):
+        QtWidgets.QMainWindow.__init__ (self)
+        self.ui = Ui_main_window ()
+        self.ui.setupUi (self)
+        self.ui.snap_image_btn.clicked.connect (self.snapImageClicked)
+        self.ui.analyze_image_btn.clicked.connect (self.analyzeImageClicked)
+        self.ui.add_data_btn.clicked.connect (self.addDataClicked)
+        self.ui.actionLoad.triggered.connect (self.loadFile)
+        self.ui.actionSave.triggered.connect (self.saveFile)
+        
+        self.image_model = ImagesModel ()
+        self.ui.images_tbl.setModel (self.image_model)
+    
+    def snapImageClicked (self):
+        print ("Snap Image Clicked")
+        
+    def analyzeImageClicked (self):
+        print ("Analyze Image Clicked")
+        
+    def addDataClicked (self):
+        print ("Add Data Clicked")
+        
+    def updateImages (self):
+        pass
+        
+    def loadFile (self):
+        options = QtWidgets.QFileDialog.Options ()
+        file, used_filter = QtWidgets.QFileDialog.getOpenFileName (self, "Load File", config.cfg.base_dir, "All Files (*);;JSON Files (*.json)", "JSON Files (*.json)", options=options)
+        
+        self.openFile (file)
+        config.cfg.base_dir = os.path.dirname (file)
+        config.cfg.save ()
+        print ("Load File {}".format (file))
+        
+    def saveFile (self):
+        print ("Save File")
+
+    def openFile (self, filename):
+        data = []
+
+        f = open (filename)
+        s = ""
+        for l in f:
+            s += l
+        f.close ()
+        
+        try:
+            data = json.loads (s)
+            logger.info ("{} Datensätze geladen.".format (len (data)))
+            self.ui.statusbar.showMessage ("Loaded {} data sets from {}".format (len (data), os.path.basename (filename)), 10000)
+            self.image_model.setDataList (data)
+        except ValueError as e:
+            logger.error ("Ladefehler: {}".format (e))
+            self.image_model.setDataList ([])
+            self.ui.statusbar.showMessage ("Failed to load data from {}".format (os.path.basename (filename)), 10000)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser (description='Würfelerkennung.')
@@ -176,5 +291,10 @@ if __name__ == "__main__":
     logger.addHandler (log_handler)
     logger.setLevel (log_level)
 
-    trainer = Trainer (args.training_fname)
-    trainer.train ()
+    app = QtWidgets.QApplication (sys.argv)
+    window = MainWindow ()
+    window.show ()
+
+    app.exec ()
+    #trainer = Trainer (args.training_fname)
+    #trainer.train ()
