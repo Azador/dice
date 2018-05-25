@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>637</width>
-    <height>575</height>
+    <width>488</width>
+    <height>515</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -35,7 +35,14 @@
       <property name="handleWidth">
        <number>4</number>
       </property>
-      <widget class="QWidget" name="image_container_w" native="true"/>
+      <widget class="QWidget" name="image_container_w" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+      </widget>
       <widget class="QWidget" name="layoutWidget">
        <layout class="QGridLayout" name="gridLayout">
         <property name="topMargin">
@@ -106,10 +113,10 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="1">
-         <widget class="QPushButton" name="add_data_btn">
+        <item row="5" column="0" colspan="2">
+         <widget class="QPushButton" name="change_data_btn">
           <property name="text">
-           <string>Add Data</string>
+           <string>Change Data</string>
           </property>
          </widget>
         </item>
@@ -124,7 +131,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>637</width>
+     <width>488</width>
      <height>29</height>
     </rect>
    </property>

@@ -231,32 +231,53 @@ class ImageWidget (QtWidgets.QGraphicsView):
         self.pixmap = None
         self.min_scaling = 1.0
         self.dice_position = None
+        self.reset_scaling_on_next_paint = False
         
     def setImage (self, pixmap):
-        new_pixmap = self.pixmap == None
+        self.reset_scaling_on_next_paint = self.pixmap == None
 
         self.pixmap = pixmap
-        
-        scene = QtWidgets.QGraphicsScene (self)
-        if pixmap == None:
-            self.setScene (scene)
-            self.scale (1.0, 1.0)
+
+        if self.pixmap == None:
             self.min_scaling = 1.0
-            return
-        
-        scene.addPixmap (self.pixmap)
-        self.setScene (scene)
+
         fx = self.width () / self.pixmap.width ()
         fy = self.height () / self.pixmap.height ()
         self.min_scaling = min ((fx, fy))
         
-        if new_pixmap:
+        self.changeScene ()
+            
+    def setDicePosition (self, pos):
+        self.dice_position = pos
+        self.changeScene ()
+        #print ("Dice position:", pos)
+        
+    def changeScene (self):
+        scene = QtWidgets.QGraphicsScene (self)
+        if self.pixmap == None:
+            self.setScene (scene)
+            self.scale (1.0, 1.0)
+            return
+        
+        scene.addPixmap (self.pixmap)
+        width = self.pixmap.width ()
+        height = self.pixmap.height ()
+        
+        if self.dice_position != None:
+            pen = QtGui.QPen ()
+            pen.setWidth (3)
+            pen.setColor (QtGui.QColor (100, 200, 100))
+            scene.addLine (self.dice_position[0], 0, self.dice_position[0], height, pen)
+            scene.addLine (0, self.dice_position[1], width, self.dice_position[1], pen)
+            
+        self.setScene (scene)
+        
+        if self.reset_scaling_on_next_paint:
+            self.reset_scaling_on_next_paint = False
             self.setScaling (self.min_scaling)
         else:
             self.changeScaling (1.0)
-            
-    def setDicePosition (self, pos):
-        print ("Dice position:", pos)
+        
         
     def wheelEvent (self, event):
         if event.modifiers () == QtCore.Qt.ControlModifier:
@@ -324,9 +345,11 @@ class MainWindow (QtWidgets.QMainWindow):
         QtWidgets.QMainWindow.__init__ (self)
         self.ui = Ui_main_window ()
         self.ui.setupUi (self)
+        self.ui.dice_value_sb.setMinimum (0)
+        self.ui.dice_value_sb.setMaximum (20)
         self.ui.snap_image_btn.clicked.connect (self.snapImageClicked)
         self.ui.analyze_image_btn.clicked.connect (self.analyzeImageClicked)
-        self.ui.add_data_btn.clicked.connect (self.addDataClicked)
+        self.ui.change_data_btn.clicked.connect (self.changeDataClicked)
         self.ui.actionLoad.triggered.connect (self.loadFile)
         self.ui.actionSave.triggered.connect (self.saveFile)
         
@@ -346,8 +369,8 @@ class MainWindow (QtWidgets.QMainWindow):
     def analyzeImageClicked (self):
         print ("Analyze Image Clicked")
         
-    def addDataClicked (self):
-        print ("Add Data Clicked")
+    def changeDataClicked (self):
+        print ("Change Data Clicked")
         
     def updateImages (self):
         pass
@@ -360,11 +383,25 @@ class MainWindow (QtWidgets.QMainWindow):
             fn = os.path.join (self.image_base_dir, self.image_model.data_list[row][0])
             self.img = QtGui.QPixmap ()
             self.img.load (fn)
+            if self.img.width () < self.img.height ():
+                t = QtGui.QTransform (0, -1, 1, 0, 0, 0)
+                img2 = self.img.transformed (t)
+                self.img = img2
+                
             #print ("Load:", fn)
+            self.ui.dice_position_x_sb.setMaximum (self.img.width ())
+            self.ui.dice_position_y_sb.setMaximum (self.img.height ())
+            
             self.updateImage ()
+            if len (self.image_model.data_list[row]) > 1:
+                self.ui.dice_value_sb.setValue (self.image_model.data_list[row][1])
+
             if len (self.image_model.data_list[row]) > 3:
                 self.image_w.setDicePosition ((self.image_model.data_list[row][2],
                                                self.image_model.data_list[row][3]))
+                self.ui.dice_position_x_sb.setValue (self.image_model.data_list[row][2])
+                self.ui.dice_position_y_sb.setValue (self.image_model.data_list[row][3])
+            
     
     def imageSelected (self, selected):
         sel_list = selected.indexes ()
