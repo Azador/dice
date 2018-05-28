@@ -113,15 +113,16 @@ class DNNPosition:
           loss=total_loss,
           eval_metric_ops=eval_metrics)
     
-    
-    def train (self, input_function):
-        for i in range (5):
-            self.estimator.train (input_fn=input_function, steps=2)
-            r = self.estimator.evaluate (input_fn=input_function, steps=1)
-            print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
-            
-    def eval (self, input_function):
-        return self.estimator.evaluate (input_fn=input_function, steps=1)
+    def train (self, input_function, hooks=None):
+        self.estimator.train (input_fn=input_function, hooks=hooks, steps=1)
+        r = self.estimator.evaluate (input_fn=input_function, hooks=hooks, steps=1)
+        print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
+
+    def eval (self, input_function, hooks=None):
+        pos_x, pos_y = [ v['position'] for v in self.estimator.predict (input_fn=input_function, predict_keys="position", hooks=hooks) ]
+
+        return (pos_x, pos_y)
+        #return self.estimator.evaluate (input_fn=input_function, steps=1)
         
             
 class ImageEntry:
@@ -130,20 +131,31 @@ class ImageEntry:
         self.pos_x = pos_x
         self.pos_y = pos_y
         self.value = value
+        self.cached_data = {}
         
     def hasPos (self):
         return self.pos_x != None and self.pos_y != None
     
     def hasValue (self):
         return self.value != None
+    
+    def hasCachedData (self, name):
+        return name in self.cached_data
+    
+    def getCachedData (self, name):
+        return self.cached_data[name]
+    
+    def setCachedData (self, name, data):
+        self.cached_data[name] = data
 
 class ImagesModel (QtGui.QStandardItemModel):
     
     IMAGE_NAME, POS_X, POS_Y, VALUE, COLUMNS = range (5)
     
-    def __init__ (self):
+    def __init__ (self, main_window):
         QtGui.QStandardItemModel.__init__ (self, 0, 4)
         self.setDataList([], "")
+        self.main_window = main_window
         
     def setDataList (self, data, base_dir):
         self.base_dir = base_dir
@@ -153,17 +165,32 @@ class ImagesModel (QtGui.QStandardItemModel):
         self.setRowCount (len (data))
         self.dataChanged.emit (self.index (0,0), self.index (len (data)-1, 3))
 
-    @staticmethod
-    def loadSmallImage (fname, *label):
+    def loadSmallImage (self, t_row, *label):
         #print ("###### fname:", fname)
+        label = [ tf.cast (l, dtype=tf.float32) for l in label ]
+
+        #print (dir (t_row))
+        #print (repr (label))
+        #print (dir (label))
+        #print ("session:", repr (self.main_window.tf_session))
+        
+        row = 0
+        
+        if self.main_window.tf_session != None:
+            row = t_row.eval (self.main_window.tf_session)
+
+        if self.data_list[row].hasCachedData ('small_image'):
+            return ( {"images_small": self.data_list[row].getCachedData ('small_image') }, *label )
+            
+        fname = os.path.join (self.base_dir, self.data_list[row].file_name)
         image_string = tf.read_file (fname)
         image = tf.image.decode_jpeg (image_string)
         image = tf.image.convert_image_dtype (image, dtype=tf.float32)
         image = tf.image.resize_images (image, [92, 69])
         image = tf.image.rgb_to_grayscale (image)
         image = tf.reshape (image, (6348, ))
+        self.data_list[row].setCachedData ('small_image', image)
         
-        label = [ tf.cast (l, dtype=tf.float32) for l in label ]
         #label = tf.cast (label, dtype=tf.float32)
     
         #print ("###### img shape:", image.shape)
@@ -174,12 +201,13 @@ class ImagesModel (QtGui.QStandardItemModel):
         #return ( {"image_small": image_resized, "image": image_decoded}, ( nr, pos ) )
     
     def getTrainingPosData (self):
-        filenames = [ os.path.join (self.base_dir, d.file_name) for d in self.data_list ]
+        #filenames = [ os.path.join (self.base_dir, d.file_name) for d in self.data_list ]
+        rows = [ row for row in range (len (self.data_list)) ]
         numbers = [ d.value for d in self.data_list ]
         pos = [ (d.pos_x, d.pos_y) for d in self.data_list ]
     
-        dataset = tf.data.Dataset.from_tensor_slices ( (filenames, pos) )
-        dataset = dataset.map (ImagesModel.loadSmallImage)
+        dataset = tf.data.Dataset.from_tensor_slices ( (rows, pos) )
+        dataset = dataset.map (self.loadSmallImage)
         #dataset = dataset.shuffle (buffer_size=1)
         dataset = dataset.batch (10)
         dataset = dataset.repeat (10)
@@ -192,12 +220,13 @@ class ImagesModel (QtGui.QStandardItemModel):
         return features, labels
     
     def getEvalPosData (self, row):
-        filenames = [ os.path.join (self.base_dir, self.data_list[row].file_name) ]
+        #filenames = [ os.path.join (self.base_dir, self.data_list[row].file_name) ]
+        rows = [ row ]
         numbers = [ self.data_list[row].value ]
         pos = [ (self.data_list[row].pos_x, self.data_list[row].pos_y) ]
     
-        dataset = tf.data.Dataset.from_tensor_slices ( (filenames, pos) )
-        dataset = dataset.map (ImagesModel.loadSmallImage)
+        dataset = tf.data.Dataset.from_tensor_slices ( (rows, pos) )
+        dataset = dataset.map (self.loadSmallImage)
         #dataset = dataset.shuffle (buffer_size=1)
         dataset = dataset.batch (1)
         dataset = dataset.repeat (1)
@@ -378,6 +407,17 @@ class ImageWidget (QtWidgets.QGraphicsView):
                               0.0, 0.0, 1.0 / abs_factor)
         
         self.setTransform (t, False)
+
+class SessionRunHook (tf.train.SessionRunHook):
+    def __init__ (self, main_window):
+        self.main_window = main_window
+        
+    def after_create_session (self, session, coord):
+        #print ("create session:", repr (session))
+        self.main_window.setTFSession (session)
+        
+    def end (self, session):
+        self.main_window.setTFSession (None)
         
 class MainWindow (QtWidgets.QMainWindow):
     ui = Ui_main_window ()
@@ -393,10 +433,11 @@ class MainWindow (QtWidgets.QMainWindow):
         self.ui.snap_image_btn.clicked.connect (self.snapImageClicked)
         self.ui.analyze_image_btn.clicked.connect (self.analyzeImageClicked)
         self.ui.change_data_btn.clicked.connect (self.changeDataClicked)
+        self.ui.train_btn.clicked.connect (self.trainClicked)
         self.ui.actionLoad.triggered.connect (self.loadFile)
         self.ui.actionSave.triggered.connect (self.saveFile)
         
-        self.image_model = ImagesModel ()
+        self.image_model = ImagesModel (self)
         self.ui.images_tbl.setModel (self.image_model)
         self.ui.images_tbl.header ().setSectionResizeMode (QtWidgets.QHeaderView.ResizeToContents)
         self.ui.images_tbl.selectionModel ().selectionChanged.connect (self.imageSelected)
@@ -407,7 +448,13 @@ class MainWindow (QtWidgets.QMainWindow):
         self.grid_layout_image.addWidget(self.image_w, 0, 0, 1, 1)
 
         self.dnn_position = DNNPosition ()
+        self.tf_session = None
+        
+        self.tf_hooks = [ SessionRunHook (self) ]
     
+    def setTFSession (self, session):
+        self.tf_session = session
+
     def snapImageClicked (self):
         print ("Snap Image Clicked")
         
@@ -423,11 +470,15 @@ class MainWindow (QtWidgets.QMainWindow):
                 break
         
         if row != None:
-            r = self.dnn_position.eval (lambda: self.image_model.getEvalPosData (row))
-            print (r)
+            r = self.dnn_position.eval (lambda: self.image_model.getEvalPosData (row), hooks=self.tf_hooks)
+            print ("Result:", r)
         
     def changeDataClicked (self):
         print ("Change Data Clicked")
+        
+    def trainClicked (self):
+        print ("Train Clicked")
+        self.dnn_position.train (self.image_model.getTrainingPosData)
         
     def updateImages (self):
         pass
@@ -437,13 +488,18 @@ class MainWindow (QtWidgets.QMainWindow):
         
     def showImage (self, row):
         if row < len (self.image_model.data_list):
-            fn = os.path.join (self.image_base_dir, self.image_model.data_list[row].file_name)
-            self.img = QtGui.QPixmap ()
-            self.img.load (fn)
-            if self.img.width () < self.img.height ():
-                t = QtGui.QTransform (0, -1, 1, 0, 0, 0)
-                img2 = self.img.transformed (t)
-                self.img = img2
+            if self.image_model.data_list[row].hasCachedData ("display_image"):
+                self.img = self.image_model.data_list[row].getCachedData ("display_image")
+            else:
+                fn = os.path.join (self.image_base_dir, self.image_model.data_list[row].file_name)
+                self.img = QtGui.QPixmap ()
+                self.img.load (fn)
+                if self.img.width () < self.img.height ():
+                    t = QtGui.QTransform (0, -1, 1, 0, 0, 0)
+                    img2 = self.img.transformed (t)
+                    self.img = img2
+                    
+                self.image_model.data_list[row].setCachedData ("display_image", self.img)
                 
             #print ("Load:", fn)
             self.ui.dice_position_x_sb.setMaximum (self.img.width ())
