@@ -20,48 +20,13 @@ import config
 
 logger = logging.getLogger (__name__)
 
-# class Trainer:
-#     def __init__ (self, input_function):
-#         self.input_function = input_function
-#         
-#     def train (self):
-#         #self.training_data = loadData (self.training_fname)
-#         #print (self.training_data)
-#         
-#         image_small = tf.feature_column.numeric_column ('images_small',
-#                                                         #shape = (1, 92*69),
-#                                                         dtype=tf.float32)
-# 
-#         estimator = tf.estimator.Estimator(
-#                         model_fn=cnn_model_fn,
-#                         params={
-#                             "layers": [6348, 2048, 512, 128, 32, 2],
-#                             "learning_rate": 0.001,
-#                             "optimizer": tf.train.AdamOptimizer
-#                         },
-#                         model_dir="/home/harald/NoBackup/Würfel/ModelDir")
-# 
-#         #estimator = tf.estimator.DNNRegressor (
-#         #    feature_columns = [image_small],
-#         #    hidden_units=[8192, 2048, 512, 128, 32],
-#         #    label_dimension=2,
-#         #    model_dir="/home/harald/NoBackup/Würfel/ModelDir")
-#         
-#         while True:
-#             estimator.train (input_fn=self.input_function, steps=2)
-#             r = estimator.evaluate (input_fn=self.input_function, steps=1)
-#             print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
-
 class DNNPosition:
     def __init__ (self):
-#         image_small = tf.feature_column.numeric_column ('images_small',
-#                                                         #shape = (1, 92*69),
-#                                                         dtype=tf.float32)
-
         self.estimator = tf.estimator.Estimator(
                         model_fn=self.ModelFN,
                         params={
-                            "layers": [6348, 2048, 512, 128, 32, 2],
+                            "layers": [4096, 2048, 512, 256, 256, 4],
+                            #"layers": [2048, 512, 256, 128, 64, 32, 4],
                             "learning_rate": 0.001,
                             "optimizer": tf.train.AdamOptimizer
                         },
@@ -71,7 +36,7 @@ class DNNPosition:
     def ModelFN (features, labels, mode, params):
       """Model function."""
       # Input Layer
-      layers = params.get ("layers", [6348, 2048, 512, 128, 32, 2])
+      layers = params.get ("layers", [32, 4])
     
       layer = tf.reshape (features["images_small"], [-1, 92 * 69])
     
@@ -113,28 +78,94 @@ class DNNPosition:
           loss=total_loss,
           eval_metric_ops=eval_metrics)
     
-    def train (self, input_function, hooks=None):
-        self.estimator.train (input_fn=input_function, hooks=hooks, steps=1)
-        r = self.estimator.evaluate (input_fn=input_function, hooks=hooks, steps=1)
-        print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
+    def train (self, train_input_function, eval_input_function, hooks=None, iterations=1):
+        r = { 'global_step': 0,
+              'loss': 0.0,
+              'rmse': 0.0 }
+        
+        for i in range (iterations):
+            self.estimator.train (input_fn=train_input_function, hooks=hooks, steps=30)
+            r = self.estimator.evaluate (input_fn=eval_input_function, hooks=hooks, steps=1)
+            print ("steps: {} loss: {} rmse: {}".format (r['global_step'], r['loss'], r['rmse']))
+
+        return r
 
     def eval (self, input_function, hooks=None):
-        pos_x, pos_y = [ v['position'] for v in self.estimator.predict (input_fn=input_function, predict_keys="position", hooks=hooks) ]
+        pos_x1, pos_y1, pos_x2, pos_y2 = [ v['position'] for v in self.estimator.predict (input_fn=input_function, predict_keys="position", hooks=hooks) ]
 
-        return (pos_x, pos_y)
+        return (pos_x1, pos_y1, pos_x2, pos_y2)
         #return self.estimator.evaluate (input_fn=input_function, steps=1)
         
+class TrainThread (QtCore.QThread):
+    iterationSignal = QtCore.pyqtSignal (int, float)
+    finishedSignal = QtCore.pyqtSignal ()
+    
+    def __init__ (self, trainer):
+        QtCore.QThread.__init__ (self)
+        self.trainer = trainer
+        self.abort = False
+    
+    def run (self):
+        while not self.abort:
+            r = self.trainer ()
+            self.iterationSignal.emit (r['global_step'], r['rmse'])
+
+        self.finishedSignal.emit ()
+         
+    def abortTraining (self):
+        self.abort = True
+
+class SnapThread (QtCore.QThread):
+    imageSnappedSignal = QtCore.pyqtSignal ("QString")
+
+    def __init__ (self, fname):
+        QtCore.QThread.__init__ (self)
+        self.fname = fname
+    
+    def run (self):
+        try:
+            cmd = config.cfg.capture_command
+            p = QtCore.QProcess ()
+            #print ("start", repr (cmd))
+            p.start (cmd)
+
+            p.waitForStarted(-1)
             
+            f = open (self.fname, "wb")
+            while p.state () != QtCore.QProcess.NotRunning:
+                if p.waitForReadyRead (-1):
+                    b = p.read (1024*1024)
+                
+                    if len (b) > 0:
+                        f.write (b)
+    
+            f.close ()
+            self.imageSnappedSignal.emit (self.fname)
+        except Exception as e:
+            self.imageSnappedSignal.emit ("")
+           
 class ImageEntry:
-    def __init__ (self, file_name, value = None, pos_x = None, pos_y = None):
+    def __init__ (self, file_name, value = None, pos_x = None, pos_y = None, pos_x2 = None, pos_y2 = None):
         self.file_name = file_name
-        self.pos_x = pos_x
-        self.pos_y = pos_y
+        if pos_x2 == None and pos_x != None:
+            self.pos_x1 = pos_x - 225
+            self.pos_x2 = pos_x + 225
+        else:
+            self.pos_x1 = pos_x
+            self.pos_x2 = pos_x2
+            
+        if pos_y2 == None and pos_y != None:
+            self.pos_y1 = pos_y - 225
+            self.pos_y2 = pos_y + 225
+        else:
+            self.pos_y1 = pos_y
+            self.pos_y2 = pos_y2
+            
         self.value = value
         self.cached_data = {}
         
     def hasPos (self):
-        return self.pos_x != None and self.pos_y != None
+        return self.pos_x1 != None and self.pos_y1 != None and self.pos_x2 != None and self.pos_y2 != None
     
     def hasValue (self):
         return self.value != None
@@ -150,10 +181,10 @@ class ImageEntry:
 
 class ImagesModel (QtGui.QStandardItemModel):
     
-    IMAGE_NAME, POS_X, POS_Y, VALUE, COLUMNS = range (5)
+    IMAGE_NAME, POS_X1, POS_Y1, POS_X2, POS_Y2, VALUE, COLUMNS = range (7)
     
     def __init__ (self, main_window):
-        QtGui.QStandardItemModel.__init__ (self, 0, 4)
+        QtGui.QStandardItemModel.__init__ (self, 0, 6)
         self.setDataList([], "")
         self.main_window = main_window
         
@@ -163,80 +194,56 @@ class ImagesModel (QtGui.QStandardItemModel):
         self.data_list = data
         self.endResetModel ()
         self.setRowCount (len (data))
-        self.dataChanged.emit (self.index (0,0), self.index (len (data)-1, 3))
+        self.dataChanged.emit (self.index (0,0), self.index (len (data)-1, ImagesModel.COLUMNS-1))
+        
+    def addNewImage (self, image_entry):
+        pos = len (self.data_list)
+        self.beginInsertRows (QtCore.QModelIndex (), pos, pos)
+        self.data_list.append (image_entry)
+        self.endInsertRows ()
+        self.setRowCount (len (self.data_list))
+        self.dataChanged.emit (self.index (pos,0), self.index (pos, ImagesModel.COLUMNS-1))
+        return pos
 
-    def loadSmallImage (self, t_row, *label):
+    def loadSmallImage (self, fname, *label):
         #print ("###### fname:", fname)
         label = [ tf.cast (l, dtype=tf.float32) for l in label ]
 
-        #print (dir (t_row))
-        #print (repr (label))
-        #print (dir (label))
-        #print ("session:", repr (self.main_window.tf_session))
-        
-        row = 0
-        
-        if self.main_window.tf_session != None:
-            row = t_row.eval (self.main_window.tf_session)
-
-        if self.data_list[row].hasCachedData ('small_image'):
-            return ( {"images_small": self.data_list[row].getCachedData ('small_image') }, *label )
-            
-        fname = os.path.join (self.base_dir, self.data_list[row].file_name)
         image_string = tf.read_file (fname)
         image = tf.image.decode_jpeg (image_string)
         image = tf.image.convert_image_dtype (image, dtype=tf.float32)
         image = tf.image.resize_images (image, [92, 69])
         image = tf.image.rgb_to_grayscale (image)
         image = tf.reshape (image, (6348, ))
-        self.data_list[row].setCachedData ('small_image', image)
-        
-        #label = tf.cast (label, dtype=tf.float32)
-    
-        #print ("###### img shape:", image.shape)
-        #print ("###### image:", image)
-        #print ("###### label:", label)
-        #print ("###### img size:", tf.size (image_resized).eval ())
         return ( {"images_small": image }, *label )
-        #return ( {"image_small": image_resized, "image": image_decoded}, ( nr, pos ) )
     
+    def getPosData (self, rows, batches, repeat):
+        filenames = [ os.path.join (self.base_dir, self.data_list[row].file_name) for row in rows ]
+        numbers = [ self.data_list[row].value for row in rows ]
+        pos = [ (self.data_list[row].pos_x1, self.data_list[row].pos_y1,
+                 self.data_list[row].pos_x2, self.data_list[row].pos_y2) for row in rows ]
+    
+        dataset = tf.data.Dataset.from_tensor_slices ( (filenames, pos) )
+        dataset = dataset.map (self.loadSmallImage)
+        dataset = dataset.shuffle (buffer_size=1)
+        dataset = dataset.batch (batches)
+        dataset = dataset.repeat (repeat)
+        
+        iterator = dataset.make_one_shot_iterator()
+    
+        # `features` is a dictionary in which each value is a batch of values for
+        # that feature; `labels` is a batch of labels.
+        features, labels = iterator.get_next()
+        return features, labels
+
     def getTrainingPosData (self):
-        #filenames = [ os.path.join (self.base_dir, d.file_name) for d in self.data_list ]
-        rows = [ row for row in range (len (self.data_list)) ]
-        numbers = [ d.value for d in self.data_list ]
-        pos = [ (d.pos_x, d.pos_y) for d in self.data_list ]
+        return self.getPosData (range (len (self.data_list)), 11, 10)
     
-        dataset = tf.data.Dataset.from_tensor_slices ( (rows, pos) )
-        dataset = dataset.map (self.loadSmallImage)
-        #dataset = dataset.shuffle (buffer_size=1)
-        dataset = dataset.batch (10)
-        dataset = dataset.repeat (10)
-        
-        iterator = dataset.make_one_shot_iterator()
+    def getEvalPosData (self):
+        return self.getPosData (range (len (self.data_list)), 22, 1)
     
-        # `features` is a dictionary in which each value is a batch of values for
-        # that feature; `labels` is a batch of labels.
-        features, labels = iterator.get_next()
-        return features, labels
-    
-    def getEvalPosData (self, row):
-        #filenames = [ os.path.join (self.base_dir, self.data_list[row].file_name) ]
-        rows = [ row ]
-        numbers = [ self.data_list[row].value ]
-        pos = [ (self.data_list[row].pos_x, self.data_list[row].pos_y) ]
-    
-        dataset = tf.data.Dataset.from_tensor_slices ( (rows, pos) )
-        dataset = dataset.map (self.loadSmallImage)
-        #dataset = dataset.shuffle (buffer_size=1)
-        dataset = dataset.batch (1)
-        dataset = dataset.repeat (1)
-        
-        iterator = dataset.make_one_shot_iterator()
-    
-        # `features` is a dictionary in which each value is a batch of values for
-        # that feature; `labels` is a batch of labels.
-        features, labels = iterator.get_next()
-        return features, labels
+    def getPredictPosData (self, row):
+        return self.getPosData ([ row ], 1, 1)
     
     def columnCount (self, parent_index):
         if parent_index == QtCore.QModelIndex ():
@@ -250,11 +257,17 @@ class ImagesModel (QtGui.QStandardItemModel):
                 if section == ImagesModel.IMAGE_NAME:
                     return "Image"
                 
-                elif section == ImagesModel.POS_X:
-                    return "X"
+                elif section == ImagesModel.POS_X1:
+                    return "X1"
                 
-                elif section == ImagesModel.POS_Y:
-                    return "Y"
+                elif section == ImagesModel.POS_Y1:
+                    return "Y1"
+                
+                elif section == ImagesModel.POS_X2:
+                    return "X2"
+                
+                elif section == ImagesModel.POS_Y2:
+                    return "Y2"
                 
                 elif section == ImagesModel.VALUE:
                     return "Value"
@@ -269,15 +282,27 @@ class ImagesModel (QtGui.QStandardItemModel):
                 if col == ImagesModel.IMAGE_NAME:
                     return os.path.basename (self.data_list[row].file_name)
                 
-                elif col == ImagesModel.POS_X:
+                elif col == ImagesModel.POS_X1:
                     if self.data_list[row].hasPos ():
-                        return "{}".format (self.data_list[row].pos_x)
+                        return "{}".format (self.data_list[row].pos_x1)
                     else:
                         return "---"
                     
-                elif col == ImagesModel.POS_Y:
+                elif col == ImagesModel.POS_Y1:
                     if self.data_list[row].hasPos ():
-                        return "{}".format (self.data_list[row].pos_y)
+                        return "{}".format (self.data_list[row].pos_y1)
+                    else:
+                        return "---"
+                    
+                elif col == ImagesModel.POS_X2:
+                    if self.data_list[row].hasPos ():
+                        return "{}".format (self.data_list[row].pos_x2)
+                    else:
+                        return "---"
+                    
+                elif col == ImagesModel.POS_Y2:
+                    if self.data_list[row].hasPos ():
+                        return "{}".format (self.data_list[row].pos_y2)
                     else:
                         return "---"
                     
@@ -298,13 +323,16 @@ class ImagesModel (QtGui.QStandardItemModel):
 class ImageWidget (QtWidgets.QGraphicsView):
     MAX_SCALING = 30.0
     
+    rectSelected = QtCore.pyqtSignal (QtCore.QPointF, QtCore.QPointF)
+
     def __init__ (self, parent):
         QtWidgets.QGraphicsView.__init__ (self, parent)
         self.pixmap = None
         self.min_scaling = 1.0
         self.dice_position = None
         self.reset_scaling_on_next_paint = False
-        
+        self.start_rect_selection = None
+
     def setImage (self, pixmap):
         self.reset_scaling_on_next_paint = self.pixmap == None
 
@@ -339,8 +367,10 @@ class ImageWidget (QtWidgets.QGraphicsView):
             pen = QtGui.QPen ()
             pen.setWidth (3)
             pen.setColor (QtGui.QColor (100, 200, 100))
-            scene.addLine (self.dice_position[0], 0, self.dice_position[0], height, pen)
-            scene.addLine (0, self.dice_position[1], width, self.dice_position[1], pen)
+            scene.addLine (self.dice_position[0], self.dice_position[1], self.dice_position[0], self.dice_position[3], pen)
+            scene.addLine (self.dice_position[2], self.dice_position[1], self.dice_position[2], self.dice_position[3], pen)
+            scene.addLine (self.dice_position[0], self.dice_position[1], self.dice_position[2], self.dice_position[1], pen)
+            scene.addLine (self.dice_position[0], self.dice_position[3], self.dice_position[2], self.dice_position[3], pen)
             
         self.setScene (scene)
         
@@ -349,7 +379,31 @@ class ImageWidget (QtWidgets.QGraphicsView):
             self.setScaling (self.min_scaling)
         else:
             self.changeScaling (1.0)
+
+    def mousePressEvent (self, event):
+        if event.modifiers () == QtCore.Qt.ControlModifier and self.pixmap != None:
+            #print ("Mouse click @ {}, {}".format (event.x (), event.y ()))
+            p = self.mapToScene (event.x (), event.y ())
+            #print ("Mouse click @ {}, {}".format (p.x (), p.y ()))
+            self.start_rect_selection = p
+            return
         
+        self.start_rect_selection = None
+        return QtWidgets.QGraphicsView.mousePressEvent (self, event)
+            
+    def mouseReleaseEvent (self, event):
+        if self.start_rect_selection != None and event.modifiers () == QtCore.Qt.ControlModifier and self.pixmap != None:
+            start_rect_selection = self.start_rect_selection
+            self.start_rect_selection = None
+            
+            #print ("Mouse click @ {}, {}".format (event.x (), event.y ()))
+            p = self.mapToScene (event.x (), event.y ())
+            #print ("Mouse click @ {}, {}".format (p.x (), p.y ()))
+
+            self.rectSelected.emit (start_rect_selection, p)
+            return
+        
+        return QtWidgets.QGraphicsView.mouseReleaseEvent (self, event)
         
     def wheelEvent (self, event):
         if event.modifiers () == QtCore.Qt.ControlModifier:
@@ -417,6 +471,7 @@ class SessionRunHook (tf.train.SessionRunHook):
         self.main_window.setTFSession (session)
         
     def end (self, session):
+        #print ("end session:", repr (session))
         self.main_window.setTFSession (None)
         
 class MainWindow (QtWidgets.QMainWindow):
@@ -436,6 +491,7 @@ class MainWindow (QtWidgets.QMainWindow):
         self.ui.train_btn.clicked.connect (self.trainClicked)
         self.ui.actionLoad.triggered.connect (self.loadFile)
         self.ui.actionSave.triggered.connect (self.saveFile)
+        self.ui.actionQuit.triggered.connect (self.quitProgram)
         
         self.image_model = ImagesModel (self)
         self.ui.images_tbl.setModel (self.image_model)
@@ -446,19 +502,49 @@ class MainWindow (QtWidgets.QMainWindow):
         self.grid_layout_image.setContentsMargins (0, 0, 0, 0)
         self.image_w = ImageWidget (self.ui.image_container_w)
         self.grid_layout_image.addWidget(self.image_w, 0, 0, 1, 1)
+        
+        self.image_w.rectSelected.connect (self.diceRectSelected)
 
         self.dnn_position = DNNPosition ()
         self.tf_session = None
         
         self.tf_hooks = [ SessionRunHook (self) ]
-    
+        self.train_thread = None
+        self.snap_thread = None
+        
+        self.ignore_signals = False
+
     def setTFSession (self, session):
         self.tf_session = session
 
     def snapImageClicked (self):
         print ("Snap Image Clicked")
         
+        if self.snap_thread != None:
+            return
+        
+        self.ui.snap_image_btn.setEnabled (False)
+        fname = os.path.join (config.cfg.base_dir, "image_test.jpg")
+        self.snap_thread = SnapThread (fname)
+        self.snap_thread.imageSnappedSignal.connect (self.imageSnapped)
+        self.snap_thread.start ()
+
+    def imageSnapped (self, fname):
+        print ("snap finished, fname:", repr (fname))
+        if fname != None and fname != "":
+            print ("create image entry")
+            pos = self.image_model.addNewImage (ImageEntry (fname))
+            self.selectImage (pos)
+            
+        print ("end")
+        self.snap_thread = None
+        self.ui.snap_image_btn.setEnabled (True)
+        
     def analyzeImageClicked (self):
+        if self.train_thread != None:
+            self.ui.statusbar.showMessage ("Training active", 10000)
+            return
+        
         print ("Analyze Image Clicked")
         
         sel_list = self.ui.images_tbl.selectionModel ().selection ().indexes ()
@@ -470,15 +556,88 @@ class MainWindow (QtWidgets.QMainWindow):
                 break
         
         if row != None:
-            r = self.dnn_position.eval (lambda: self.image_model.getEvalPosData (row), hooks=self.tf_hooks)
-            print ("Result:", r)
+            r = self.dnn_position.eval (lambda: self.image_model.getPredictPosData (row), hooks=self.tf_hooks)
+            self.diceRectSelected (QtCore.QPoint (r[0], r[1]), QtCore.QPoint (r[2], r[3]))
+
+            print ("Result for row {}: {}".format (row, r))
         
     def changeDataClicked (self):
         print ("Change Data Clicked")
+
+    def trainClicked (self, checked):
+        if self.ignore_signals:
+            return
         
-    def trainClicked (self):
-        print ("Train Clicked")
-        self.dnn_position.train (self.image_model.getTrainingPosData)
+        if checked:
+            if self.train_thread != None:
+                print ("Training still running")
+                return
+    
+            print ("Start training")
+            self.ui.analyze_image_btn.setEnabled (False)
+            self.train_thread = TrainThread (lambda: self.dnn_position.train (self.image_model.getTrainingPosData,
+                                                                              self.image_model.getEvalPosData, hooks=self.tf_hooks))
+            self.train_thread.iterationSignal.connect (self.trainingInfo)
+            self.train_thread.finishedSignal.connect (self.trainingFinished)
+            self.train_thread.start ()
+
+        else:
+            if self.train_thread == None:
+                print ("No training started")
+                return
+
+            print ("Stop training")
+            self.ignore_signals = True
+            self.ui.train_btn.setChecked (True)
+            self.ignore_signals = False
+
+            self.train_thread.abortTraining ()
+            print ("Training stop triggered")
+            
+    def trainingInfo (self, iterations, rmse):
+        self.ui.statusbar.showMessage ("Iteration {}, root mean squared error: {}".format (iterations, rmse), 10000)
+        print ("Iteration {}, root mean squared error: {}".format (iterations, rmse))
+        
+    def trainingFinished (self):
+        #self.ignore_signals = True
+        self.ui.train_btn.setChecked (False)
+        #self.ignore_signals = False
+        self.train_thread = None
+        self.ui.analyze_image_btn.setEnabled (True)
+        print ("Training stopped")
+        
+    def diceRectSelected (self, point1, point2):
+        #print ("point:", point)
+        x1 = point1.x ()
+        x2 = point2.x ()
+        y1 = point1.y ()
+        y2 = point2.y ()
+        
+        if x1 > x2:
+            t = x1
+            x1 = x2
+            x2 = t
+            
+        if y1 > y2:
+            t = y1
+            y1 = y2
+            y2 = t
+            
+        if x2 - x1 < 200:
+            d = (200 - (x2 - x1)) / 2
+            x1 -= d
+            x2 += d
+            
+        if y2 - y1 < 200:
+            d = (200 - (y2 - y1)) / 2
+            y1 -= d
+            y2 += d
+            
+        self.ui.dice_position_x1_sb.setValue (x1)
+        self.ui.dice_position_y1_sb.setValue (y1)
+        self.ui.dice_position_x2_sb.setValue (x2)
+        self.ui.dice_position_y2_sb.setValue (y2)
+        self.image_w.setDicePosition ((int (x1), int (y1), int (x2), int (y2)))
         
     def updateImages (self):
         pass
@@ -502,27 +661,42 @@ class MainWindow (QtWidgets.QMainWindow):
                 self.image_model.data_list[row].setCachedData ("display_image", self.img)
                 
             #print ("Load:", fn)
-            self.ui.dice_position_x_sb.setMaximum (self.img.width ())
-            self.ui.dice_position_y_sb.setMaximum (self.img.height ())
+            self.ui.dice_position_x1_sb.setMaximum (self.img.width ())
+            self.ui.dice_position_y1_sb.setMaximum (self.img.height ())
+            self.ui.dice_position_x2_sb.setMaximum (self.img.width ())
+            self.ui.dice_position_y2_sb.setMaximum (self.img.height ())
             
             self.updateImage ()
             if self.image_model.data_list[row].hasValue ():
                 self.ui.dice_value_sb.setValue (self.image_model.data_list[row].value)
 
             if self.image_model.data_list[row].hasPos ():
-                self.image_w.setDicePosition ((self.image_model.data_list[row].pos_x,
-                                               self.image_model.data_list[row].pos_y))
-                self.ui.dice_position_x_sb.setValue (self.image_model.data_list[row].pos_x)
-                self.ui.dice_position_y_sb.setValue (self.image_model.data_list[row].pos_y)
-            
-    
+                self.image_w.setDicePosition ((self.image_model.data_list[row].pos_x1,
+                                               self.image_model.data_list[row].pos_y1,
+                                               self.image_model.data_list[row].pos_x2,
+                                               self.image_model.data_list[row].pos_y2))
+                self.ui.dice_position_x1_sb.setValue (self.image_model.data_list[row].pos_x1)
+                self.ui.dice_position_y1_sb.setValue (self.image_model.data_list[row].pos_y1)
+                self.ui.dice_position_x2_sb.setValue (self.image_model.data_list[row].pos_x2)
+                self.ui.dice_position_y2_sb.setValue (self.image_model.data_list[row].pos_y2)
+            else:
+                self.image_w.setDicePosition (None)
+
     def imageSelected (self, selected):
+        #print ("img selected")
         sel_list = selected.indexes ()
         for sel in sel_list:
             row = sel.row ()
             if row < len (self.image_model.data_list):
                 self.showImage (row)
                 return
+    
+    def selectImage (self, row):
+        sel_model = self.ui.images_tbl.selectionModel ()
+        index1 = self.image_model.index (row, 0)
+        index2 = self.image_model.index (row, ImagesModel.COLUMNS-1)
+        sel_model.select (QtCore.QItemSelection (index1, index2),
+                          QtCore.QItemSelectionModel.ClearAndSelect | QtCore.QItemSelectionModel.Current)
         
     def loadFile (self):
         options = QtWidgets.QFileDialog.Options ()
@@ -554,15 +728,15 @@ class MainWindow (QtWidgets.QMainWindow):
             self.image_model.setDataList (data, os.path.dirname (filename))
             if len (data) >= 1:
                 self.image_base_dir = os.path.dirname (filename)
-                index1 = self.image_model.index (0, 0)
-                index2 = self.image_model.index (0, ImagesModel.COLUMNS-1)
-                self.ui.images_tbl.selectionModel ().select (QtCore.QItemSelection (index1, index2),
-                                                             QtCore.QItemSelectionModel.ClearAndSelect | QtCore.QItemSelectionModel.Current)
+                self.selectImage (0)
         except ValueError as e:
             logger.error ("Ladefehler: {}".format (e))
             self.image_model.setDataList ([])
             self.ui.statusbar.showMessage ("Failed to load data from {}".format (os.path.basename (filename)), 10000)
 
+    def quitProgram (self):
+        QtWidgets.qApp.exit ()
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser (description='Würfelerkennung.')
     parser.add_argument ('-t', dest='training_fname', default='/home/harald/NoBackup/Würfel/W20-grau-training-test.json',
@@ -598,5 +772,3 @@ if __name__ == "__main__":
     window.show ()
 
     app.exec ()
-    #trainer = Trainer (args.training_fname)
-    #trainer.train ()

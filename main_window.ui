@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>488</width>
+    <width>605</width>
     <height>515</height>
    </rect>
   </property>
@@ -51,20 +51,6 @@
         <property name="bottomMargin">
          <number>6</number>
         </property>
-        <item row="0" column="0" colspan="2">
-         <widget class="QPushButton" name="snap_image_btn">
-          <property name="text">
-           <string>Snap Image</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0" colspan="2">
-         <widget class="QPushButton" name="analyze_image_btn">
-          <property name="text">
-           <string>Analyze Image</string>
-          </property>
-         </widget>
-        </item>
         <item row="2" column="0">
          <widget class="QLabel" name="dice_position_lb">
           <property name="sizePolicy">
@@ -94,16 +80,43 @@
           </property>
          </widget>
         </item>
-        <item row="4" column="1">
-         <widget class="QSpinBox" name="dice_value_sb"/>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="dice_position_y1_sb"/>
         </item>
         <item row="2" column="1">
-         <widget class="QSpinBox" name="dice_position_x_sb"/>
+         <widget class="QSpinBox" name="dice_position_x1_sb"/>
         </item>
-        <item row="3" column="1">
-         <widget class="QSpinBox" name="dice_position_y_sb"/>
+        <item row="2" column="2">
+         <widget class="QSpinBox" name="dice_position_x2_sb"/>
         </item>
-        <item row="6" column="0" colspan="2">
+        <item row="3" column="2">
+         <widget class="QSpinBox" name="dice_position_y2_sb"/>
+        </item>
+        <item row="1" column="0" colspan="3">
+         <widget class="QPushButton" name="analyze_image_btn">
+          <property name="text">
+           <string>Analyze Image</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0" colspan="3">
+         <widget class="QPushButton" name="snap_image_btn">
+          <property name="text">
+           <string>Snap Image</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1" colspan="2">
+         <widget class="QSpinBox" name="dice_value_sb"/>
+        </item>
+        <item row="5" column="0" colspan="3">
+         <widget class="QPushButton" name="change_data_btn">
+          <property name="text">
+           <string>Change Data</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0" colspan="3">
          <widget class="QTreeView" name="images_tbl">
           <property name="alternatingRowColors">
            <bool>true</bool>
@@ -113,17 +126,13 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="0" colspan="2">
-         <widget class="QPushButton" name="change_data_btn">
-          <property name="text">
-           <string>Change Data</string>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="0" colspan="2">
+        <item row="7" column="0" colspan="3">
          <widget class="QPushButton" name="train_btn">
           <property name="text">
            <string>Train</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
           </property>
          </widget>
         </item>
@@ -138,7 +147,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>488</width>
+     <width>605</width>
      <height>29</height>
     </rect>
    </property>
@@ -148,6 +157,8 @@
     </property>
     <addaction name="actionLoad"/>
     <addaction name="actionSave"/>
+    <addaction name="separator"/>
+    <addaction name="actionQuit"/>
    </widget>
    <addaction name="menuFile"/>
   </widget>
@@ -160,6 +171,11 @@
   <action name="actionLoad">
    <property name="text">
     <string>&amp;Load</string>
+   </property>
+  </action>
+  <action name="actionQuit">
+   <property name="text">
+    <string>&amp;Quit</string>
    </property>
   </action>
  </widget>
