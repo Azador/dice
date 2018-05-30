@@ -3,15 +3,16 @@
 #
 
 import os
-import pickle
+import json
 
 class Config (object):
     def __init__ (self):
-        self.data = {"base_dir": ""}
+        self.data = {"base_dir": "",
+                     "capture_command": "raspistill -o -" }
 
         if "HOME" in os.environ:
             self.data["base_dir"] = os.environ["HOME"]
-            
+
     def __setattr__(self, *args, **kwargs):
         if len(args) >= 2:
             if args[0] != "data" and args[0] in self.data:
@@ -38,8 +39,8 @@ class Config (object):
         if fname == None:
             fname = Config.defaultFileName ()
             
-        f = open (fname, "wb")
-        pickle.dump (self.data, f)
+        f = open (fname, "w")
+        json.dump (self.data, f, indent=2, sort_keys=True)
         f.close ()
         
     def load (self, fname = None):
@@ -48,10 +49,11 @@ class Config (object):
             
         data = None
         if os.path.isfile (fname):
-            f = open (fname, "rb")
+            f = open (fname, "r")
             try:
-                data = pickle.load (f)
-            except:
+                data = json.load (f)
+            except Exception as e:
+                print ("Error:", e)
                 data = None
                 
             f.close ()
